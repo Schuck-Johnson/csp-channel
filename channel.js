@@ -198,9 +198,9 @@ var chan = (function() {
 
         p.csp$channel$ReadPort$take = function(o, handler) {
             impl.cleanup(o);
-            if (o.buffer && (o.buffer.length > 0)) {
+            if (o.buffer && (impl.count(o.buffer) > 0)) {
                 if (impl.active(handler) && impl.commit(handler)) {
-                    return box(o.buffer.remove(o));
+                    return box(impl.remove(o.buffer));
                 }
                 return null;
             } else {
@@ -278,6 +278,9 @@ var chan = (function() {
                 throw (new Error("Can't add to a full buffer"));
             }
             return b.buffer.unshift(item);
+        };
+        fb.csp$Core$count = function(o) {
+            return o.buffer.length;
         };
         return {
             Fixed: FixedBuffer
