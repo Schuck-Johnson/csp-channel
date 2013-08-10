@@ -68,8 +68,8 @@ var chan = (function() {
                 throw protocol_error('csp.channel.Buffer/remove', o);
             },
             add: function(o, item) {
-                if (o && o.csp$channel$Buffer$item) {
-                    return o.csp$channel$Buffer$item(o, item);
+                if (o && o.csp$channel$Buffer$add) {
+                    return o.csp$channel$Buffer$add(o, item);
                 }
                 throw protocol_error('csp.channel.Buffer/add', o);
             }
