@@ -209,8 +209,8 @@ var chan = (function() {
                     putter = o.puts[i][0];
                     if (impl.active(putter) && impl.active(handler)) {
                         o.takes.splice(i, 1);
-                        take_cb = impl.commit(putter);
-                        put_cb = impl.commit(handler);
+                        take_cb = impl.commit(handler);
+                        put_cb = impl.commit(putter);
                         val = o.puts[i][1];
                         break;
                     }
