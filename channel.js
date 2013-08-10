@@ -3,12 +3,14 @@ var chan = (function() {
     var protocol_error = function(name, o) {
         var type = typeof o;
         if ('object' == type) {
-            if(o.constructor === Array) {
-                type = "array";
-            } else if (o === null) {
-                type =  "null";
+            if (o){
+                if(o.constructor === Array) {
+                    type = "array";
+                } else {
+                    type = Object.prototype.toString.call(o);
+                }
             } else {
-                type = Object.prototype.toString.call(o);
+                type = 'null';
             }
         }
         return new Error(["No protocol method ", name, " defined for type ", type, ": ", o].join(""));
