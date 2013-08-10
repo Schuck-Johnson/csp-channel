@@ -175,7 +175,7 @@ var chan = (function() {
                     dispatch.run(function() { return take_cb(val);});
                     return box(null);
                 } else {
-                    if (o.buffer && impl.full(o.buffer)) {
+                    if (o.buffer && (! impl.full(o.buffer))) {
                         if (impl.active(handler) && impl.commit(handler)) {
                             impl.add(o.buffer, val);
                             return box(null);
