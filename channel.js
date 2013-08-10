@@ -336,7 +336,7 @@ var chan = (function() {
             closed: function(port) {
                 return impl.closed(port);
             },
-            buffer: function(n) {
+            fixed_buffer: function(n) {
                 return new Buffers.Fixed([], n);
             }
         };
@@ -366,6 +366,6 @@ var chan = (function() {
         "put": show.put,
         "close": show.close,
         "closed": show.closed,
-        "buffer": show.buffer
+        "fixed_buffer": show.fixed_buffer
     };
 })();
