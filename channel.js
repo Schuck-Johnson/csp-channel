@@ -238,9 +238,11 @@ var chan = (function() {
                 for (i = 0; i < tlen; i++) {
                     taker = o.takes[i];
                     take_cb = (impl.active(taker) && impl.commit(taker));
-                    if (take_cb) {
-                        dispatch.run(function() { return take_cb(null); });
-                    }
+                    (function(take_cb){
+                        if (take_cb) {
+                            dispatch.run(function() { return take_cb(null); });
+                        }
+                    })(take_cb);
                 }
                 return null;
             }
