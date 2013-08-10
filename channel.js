@@ -262,6 +262,46 @@ var chan = (function() {
         };
     })();
 
+    var show = (function(impl, handler, run){
+        var nop = function() {return null; };
+        return {
+            chan: function(buffer) {
+                return new Channel([], [], buffer, null);
+            },
+            take: function(port, fn1, on_caller) {
+                on_caller = on_caller || true;
+                var ret = impl.take(port, handler(fn1));
+                if (ret) {
+                    var val = impl.deref(ret);
+                    if (on_caller) {
+                        fn1(val);
+                    } else {
+                        run(function() { return fn1(val);});
+                    }
+                }
+                return null;
+            },
+            put: function(port, val, fn0, on_caller) {
+                fn0 = fn0 || nop;
+                on_caller = on_caller || true;
+                var ret = impl.put(port, val, handler(fn0));
+                if (ret && (fn0  !== nop)) {
+                    if (on_caller) {
+                        fn0();
+                    } else {
+                        run(fn0);
+                    }
+                }
+                return null;
+            },
+            close: function(port) {
+                return impl.close(port);
+            },
+            closed: function(port) {
+                return impl.closed(port);
+            }
+        };
+    })(impl, util.handler, dispatch.run);
     return {
         "impl": {
             "cleanup": impl.cleanup,
@@ -280,6 +320,11 @@ var chan = (function() {
         },
         "util": {
             "handler": util.handler
-        }
+        },
+        "chan": show.chan,
+        "take": show.take,
+        "put": show.put,
+        "close": show.close,
+        "closed": show.closed
     };
 })();
