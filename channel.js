@@ -94,6 +94,12 @@ var chan = (function() {
                     return o.csp$Core$deref(o);
                 }
                 throw protocol_error('csp.Core/deref', o);
+            },
+            count: function(o) {
+                if (o && o.csp$Core$count) {
+                    return o.csp$Core$count(o);
+                }
+                throw protocol_error('csp.Core/count', o);
             }
         },
     };
