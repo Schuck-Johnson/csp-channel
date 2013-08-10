@@ -282,8 +282,29 @@ var chan = (function() {
         fb.csp$Core$count = function(o) {
             return o.buffer.length;
         };
+        var DroppingBuffer = function(buffer, n) {
+            this.buffer = buffer;
+            this.n = n;
+        };
+        var db = DroppingBuffer.prototype;
+        db.csp$channel$Buffer$full = function(b) {
+            return false;
+        };
+        db.csp$channel$Buffer$remove = function(b) {
+            return b.buffer.pop();
+        };
+        db.csp$channel$Buffer$add = function(b, item) {
+            if (b.buffer.length !== b.n) {
+                return b.buffer.unshift(item);
+            }
+            return null;
+        };
+        db.csp$Core$count = function(o) {
+            return o.buffer.length;
+        };
         return {
-            Fixed: FixedBuffer
+            Fixed: FixedBuffer,
+            Dropping: DroppingBuffer
         };
     })(impl);
 
@@ -338,6 +359,9 @@ var chan = (function() {
             },
             fixed_buffer: function(n) {
                 return new Buffers.Fixed([], n);
+            },
+            dropping_buffer : function(n) {
+                return new Buffers.Dropping([], n);
             }
         };
     })(impl, util.handler, dispatch.run, Buffers);
@@ -356,7 +380,8 @@ var chan = (function() {
         },
         "types": {
             "Channel": Channel,
-            "FixedBuffer": Buffers.Fixed
+            "FixedBuffer": Buffers.Fixed,
+            "DroppingBuffer": Buffers.Dropping
         },
         "util": {
             "handler": util.handler
@@ -366,6 +391,7 @@ var chan = (function() {
         "put": show.put,
         "close": show.close,
         "closed": show.closed,
-        "fixed_buffer": show.fixed_buffer
+        "fixed_buffer": show.fixed_buffer,
+        "dropping_buffer": show.dropping_buffer
     };
 })();
