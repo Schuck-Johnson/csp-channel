@@ -255,6 +255,29 @@ var chan = (function() {
         return Channel;
     })(impl, box, dispatch);
 
+    var Buffers = (function(){
+        var FixedBuffer = function(buffer, n) {
+            this.buffer = buffer;
+            this.n = n;
+        };
+        var fb = FixedBuffer.prototype;
+        fb.csp$channel$Buffer$full = function(b) {
+            return (b.buffer.length === b.n);
+        };
+        fb.csp$channel$Buffer$remove = function(b) {
+            return b.buffer.pop();
+        };
+        fb.csp$channel$Buffer$add = function(b, item) {
+            if (impl.full(b)) {
+                throw (new Error("Can't add to a full buffer"));
+            }
+            return b.buffer.unshift(item);
+        };
+        return {
+            Fixed: FixedBuffer
+        };
+    })(impl);
+
     var util = (function(){
         return {
             handler: function(f) {
@@ -266,7 +289,7 @@ var chan = (function() {
         };
     })();
 
-    var show = (function(impl, handler, run){
+    var show = (function(impl, handler, run, Buffers){
         var nop = function() {return null; };
         return {
             chan: function(buffer) {
@@ -303,9 +326,12 @@ var chan = (function() {
             },
             closed: function(port) {
                 return impl.closed(port);
+            },
+            buffer: function(n) {
+                return new Buffers.Fixed([], n);
             }
         };
-    })(impl, util.handler, dispatch.run);
+    })(impl, util.handler, dispatch.run, Buffers);
     return {
         "impl": {
             "cleanup": impl.cleanup,
@@ -321,6 +347,7 @@ var chan = (function() {
         },
         "types": {
             "Channel": Channel,
+            "FixedBuffer": Buffers.Fixed
         },
         "util": {
             "handler": util.handler
@@ -329,6 +356,7 @@ var chan = (function() {
         "take": show.take,
         "put": show.put,
         "close": show.close,
-        "closed": show.closed
+        "closed": show.closed,
+        "buffer": show.buffer
     };
 })();
