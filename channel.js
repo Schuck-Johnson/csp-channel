@@ -302,9 +302,30 @@ var chan = (function() {
         db.csp$Core$count = function(o) {
             return o.buffer.length;
         };
+        var SlidingBuffer = function(buffer, n) {
+            this.buffer = buffer;
+            this.n = n;
+        };
+        var sb = SlidingBuffer.prototype;
+        sb.csp$channel$Buffer$full = function(b) {
+            return false;
+        };
+        sb.csp$channel$Buffer$remove = function(b) {
+            return b.buffer.pop();
+        };
+        sb.csp$channel$Buffer$add = function(b, item) {
+            if (b.buffer.length === b.n) {
+                impl.remove(b);
+            }
+            return b.buffer.unshift(item);
+        };
+        sb.csp$Core$count = function(o) {
+            return o.buffer.length;
+        };
         return {
             Fixed: FixedBuffer,
-            Dropping: DroppingBuffer
+            Dropping: DroppingBuffer,
+            Sliding: SlidingBuffer
         };
     })(impl);
 
@@ -362,6 +383,9 @@ var chan = (function() {
             },
             dropping_buffer : function(n) {
                 return new Buffers.Dropping([], n);
+            },
+            sliding_buffer: function(n) {
+                return new Buffers.Sliding([], n);
             }
         };
     })(impl, util.handler, dispatch.run, Buffers);
@@ -381,7 +405,8 @@ var chan = (function() {
         "types": {
             "Channel": Channel,
             "FixedBuffer": Buffers.Fixed,
-            "DroppingBuffer": Buffers.Dropping
+            "DroppingBuffer": Buffers.Dropping,
+            "SlidingBuffer": Buffers.Sliding
         },
         "util": {
             "handler": util.handler
@@ -392,6 +417,7 @@ var chan = (function() {
         "close": show.close,
         "closed": show.closed,
         "fixed_buffer": show.fixed_buffer,
-        "dropping_buffer": show.dropping_buffer
+        "dropping_buffer": show.dropping_buffer,
+        "sliding_buffer": show.sliding_buffer
     };
 })();
