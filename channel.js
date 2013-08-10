@@ -109,6 +109,159 @@ var chan = (function() {
         }
         return impl;
     })(protocols);
+
+    var box = function(val) {
+        return {
+            csp$Core$deref: function(o) {
+                return val;
+            }
+        };
+    };
+    var dispatch = (function() {
+        return {
+            run: function(f) {
+                setTimeout(f, 0);
+            }
+        };
+    })();
+    var Channel = (function(impl, box, dispatch) {
+        var Channel = function(takes, puts, buffer, closed) {
+            this.takes = takes;
+            this.puts = puts;
+            this.buffer = buffer;
+            this.closed = {csp$Core$deref: function() { return closed;}};
+        };
+
+        var p = Channel.prototype;
+
+        p.csp$channel$MMC$cleanup = function(o) {
+            var i, item, tlen = o.takes.length, plen = o.puts.length;
+            for(i = 0; i < plen; i++) {
+                item = o.puts[i][0];
+                if (! impl.active(item)) {
+                    o.puts.splice(i, 1);
+                }
+            }
+            for(i = 0; i < tlen; i++) {
+                item = o.takes[i];
+                if (! impl.active(item)) {
+                    o.takes.splice(i, 1);
+                }
+            }
+            return null;
+        };
+
+        p.csp$channel$WritePort$put = function(o, val, handler) {
+            if (val === null) {
+                throw (new Error("Cant put null in a channel"));
+            }
+            impl.cleanup(o);
+            if (impl.closed(o)) {
+                return box(null);
+            } else {
+                var take_cb, put_cb, taker, i, tlen = o.takes.length;
+                for (i = 0; i < tlen; i++) {
+                    taker = o.takes[i];
+                    if (impl.active(taker) && impl.active(handler)) {
+                        o.takes.splice(i, 1);
+                        take_cb = impl.commit(taker);
+                        put_cb = impl.commit(handler);
+                        break;
+                    }
+                }
+                if (take_cb && put_cb) {
+                    dispatch.run(function() { return take_cb(val);});
+                    return box(null);
+                } else {
+                    if (o.buffer && impl.full(o.buffer)) {
+                        if (impl.active(handler) && impl.commit(handler)) {
+                            impl.add(o.buffer, val);
+                            return box(null);
+                        }
+                        return null;
+                    } else {
+                        o.puts.unshift([handler, val]);
+                        return null;
+                    }
+                }
+            }
+            return null;
+        };
+
+        p.csp$channel$ReadPort$take = function(o, handler) {
+            impl.cleanup(o);
+            if (o.buffer && (o.buffer.length > 0)) {
+                if (impl.active(handler) && impl.commit(handler)) {
+                    return box(o.buffer.remove(o));
+                }
+                return null;
+            } else {
+                var take_cb, put_cb, val, putter, i, plen = o.puts.length;
+                for (i = 0; i < plen; i++) {
+                    putter = o.puts[i][0];
+                    if (impl.active(putter) && impl.active(handler)) {
+                        o.takes.splice(i, 1);
+                        take_cb = impl.commit(putter);
+                        put_cb = impl.commit(handler);
+                        val = o.puts[i][1];
+                        break;
+                    }
+                }
+
+                if (take_cb && put_cb) {
+                    dispatch.run(put_cb);
+                    return box(val);
+                } else {
+                    if (impl.closed(o)) {
+                        if (impl.active(handler) && impl.commit(handler)) {
+                            return box(null);
+                        }
+                        return null;
+                    } else {
+                        o.takes.unshift(handler);
+                        return null;
+                    }
+                }
+            }
+            return null;
+        };
+
+        p.csp$channel$Channel$close = function(o) {
+            impl.cleanup(o);
+            if (impl.closed(o)) {
+                return null;
+            } else {
+                o.closed = {csp$Core$deref: function() { return true;}};
+                var taker, take_cb, i, tlen = o.takes.length;
+                for (i = 0; i < tlen; i++) {
+                    taker = o.takes[i];
+                    take_cb = (impl.active(taker) && impl.commit(taker));
+                    if (take_cb) {
+                        dispatch.run(function() { return take_cb(null); });
+                    }
+                }
+                return null;
+            }
+            return null;
+        };
+
+        p.csp$channel$Channel$closed = function(o) {
+            return impl.deref(o.closed) === true;
+        };
+        return Channel;
+    })(impl, box, dispatch);
+
+    var util = (function(){
+        return {
+            handler: function(f) {
+                return {
+                    csp$channel$Handler$active: function(o) { return true;},
+                    csp$channel$Channel$commit: function(o) { return f;}
+                };
+            }
+        };
+    })();
+
     return {
         "impl": {
             "cleanup": impl.cleanup,
@@ -121,6 +274,12 @@ var chan = (function() {
             "add": impl.add,
             "active": impl.active,
             "commit": impl.commit
+        },
+        "types": {
+            "Channel": Channel,
+        },
+        "util": {
+            "handler": util.handler
         }
     };
 })();
