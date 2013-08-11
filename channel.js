@@ -144,16 +144,24 @@ var chan = (function() {
 
         p.csp$channel$MMC$cleanup = function(o) {
             var i, item, tlen = o.takes.length, plen = o.puts.length;
-            for(i = 0; i < plen; i++) {
+            i = 0;
+            while (i < plen) {
                 item = o.puts[i][0];
                 if (! impl.active(item)) {
                     o.puts.splice(i, 1);
+                    plen--;
+                } else {
+                    i++;
                 }
             }
-            for(i = 0; i < tlen; i++) {
+            i = 0;
+            while(i < tlen) {
                 item = o.takes[i];
                 if (! impl.active(item)) {
                     o.takes.splice(i, 1);
+                    tlen--;
+                } else {
+                    i++;
                 }
             }
             return null;
