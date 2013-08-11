@@ -469,7 +469,8 @@ var chan = (function() {
             "remove": impl.remove,
             "add": impl.add,
             "active": impl.active,
-            "commit": impl.commit
+            "commit": impl.commit,
+            "deref": impl.deref
         },
         "types": {
             "Channel": Channel,
