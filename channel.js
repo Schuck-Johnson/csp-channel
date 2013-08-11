@@ -340,8 +340,41 @@ var chan = (function() {
         };
     })();
 
-    var show = (function(impl, handler, run, Buffers){
+    var show = (function(impl, handler, run, Buffers, box){
         var nop = function() {return null; };
+
+        var random_array = function(n) {
+            var i, j, a = [];
+            for(i = 0; i < n; i++) {
+                a.push(0);
+            }
+            for(i = 1; i < n; i++) {
+                j = Math.floor(Math.random() * i);
+                a[i] = a[j];
+                a[j] = i;
+            }
+            return a;
+        };
+
+        var alt_flag = function() {
+            var flag = true;
+            return {
+                csp$channel$Handler$active: function(o) { return flag;},
+                csp$channel$Handler$commit: function(o) {
+                    flag = null;
+                    return true;
+                }
+            };
+        };
+        var alt_handler = function(flag, cb) {
+            return {
+                csp$channel$Handler$active: function(o) { return impl.active(flag);},
+                csp$channel$Handler$commit: function(o) {
+                    impl.commit(flag);
+                    return cb;
+                }
+            };
+        };
         return {
             chan: function(buffer) {
                 return new Channel([], [], buffer, null);
@@ -378,6 +411,42 @@ var chan = (function() {
             closed: function(port) {
                 return impl.closed(port);
             },
+            alts: function(ports, fret, options) {
+                options = options || {};
+                var flag = alt_flag(), 
+                    n = ports.length, 
+                    idxs = random_array(n),
+                    priority = (options.hasOwnProperty('priority')),
+                    ret, i, idx, wport, port, val, h, vbox;
+                for(i = 0; i < n; i++) {
+                    idx = priority ? i : idxs[i];
+                    port = ports[idx];
+                    wport = (port.constructor === Array) ? port[0] : null;
+                    h = (function(wport, port){
+                        if (wport) {
+                            return alt_handler(flag, function() { return fret(null, wport);});
+                        }
+                        return alt_handler(flag, function(v) { return fret(v, port);});
+                    })(wport, port);
+                    if (wport) {
+                        vbox = impl.put(wport, port[1], h);
+                    } else {
+                        vbox = impl.take(port, h);
+                    }
+                    if (vbox) {
+                        ret = box([impl.deref(vbox), (wport ? wport : port)]);
+                    }
+                }
+                if (ret) {
+                    return ret;
+                }
+                if (options.hasOwnProperty('default')) {
+                    if (impl.active(flag) && impl.commit(flag)) {
+                        box([options['default'], 'default']);
+                    }
+                }
+                return null;
+            },
             fixed_buffer: function(n) {
                 return new Buffers.Fixed([], n);
             },
@@ -388,7 +457,7 @@ var chan = (function() {
                 return new Buffers.Sliding([], n);
             }
         };
-    })(impl, util.handler, dispatch.run, Buffers);
+    })(impl, util.handler, dispatch.run, Buffers, box);
     return {
         "impl": {
             "cleanup": impl.cleanup,
@@ -416,6 +485,7 @@ var chan = (function() {
         "put": show.put,
         "close": show.close,
         "closed": show.closed,
+        "alts": show.alts,
         "fixed_buffer": show.fixed_buffer,
         "dropping_buffer": show.dropping_buffer,
         "sliding_buffer": show.sliding_buffer
