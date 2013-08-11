@@ -82,8 +82,8 @@ var chan = (function() {
                 throw protocol_error('csp.channel.Handler/active', o);
             },
             commit: function(o) {
-                if (o && o.csp$channel$Channel$commit) {
-                    return o.csp$channel$Channel$commit(o);
+                if (o && o.csp$channel$Handler$commit) {
+                    return o.csp$channel$Handler$commit(o);
                 }
                 throw protocol_error('csp.channel.Handler/commit', o);
             }
@@ -334,7 +334,7 @@ var chan = (function() {
             handler: function(f) {
                 return {
                     csp$channel$Handler$active: function(o) { return true;},
-                    csp$channel$Channel$commit: function(o) { return f;}
+                    csp$channel$Handler$commit: function(o) { return f;}
                 };
             }
         };
