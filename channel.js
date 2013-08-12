@@ -1,5 +1,6 @@
 var chan = (function() {
     'use strict';
+    var chan = {};
     var protocol_error = function(name, o) {
         var type = typeof o;
         if ('object' == type) {
@@ -104,7 +105,7 @@ var chan = (function() {
         },
     };
 
-    var impl = (function(p){
+    chan.impl = (function(p){
         var i,j, impl = {};
         for(i in p) {
             if (p.hasOwnProperty(i)) {
@@ -132,15 +133,17 @@ var chan = (function() {
             }
         };
     })();
-    var Channel = (function(impl, box, dispatch) {
-        var Channel = function(takes, puts, buffer, closed) {
+
+    chan.types = {};
+    (function(types, impl, box, dispatch) {
+        types.Channel = function(takes, puts, buffer, closed) {
             this.takes = takes;
             this.puts = puts;
             this.buffer = buffer;
             this.closed = {csp$Core$deref: function() { return closed;}};
         };
 
-        var p = Channel.prototype;
+        var p = types.Channel.prototype;
 
         p.csp$channel$MMC$cleanup = function(o) {
             var i, item, tlen = o.takes.length, plen = o.puts.length;
@@ -266,15 +269,14 @@ var chan = (function() {
         p.csp$channel$Channel$closed = function(o) {
             return impl.deref(o.closed) === true;
         };
-        return Channel;
-    })(impl, box, dispatch);
+    })(chan.types, chan.impl, box, dispatch);
 
-    var Buffers = (function(){
-        var FixedBuffer = function(buffer, n) {
+    (function(types, impl){
+        types.FixedBuffer = function(buffer, n) {
             this.buffer = buffer;
             this.n = n;
         };
-        var fb = FixedBuffer.prototype;
+        var fb = types.FixedBuffer.prototype;
         fb.csp$channel$Buffer$full = function(b) {
             return (b.buffer.length === b.n);
         };
@@ -290,11 +292,11 @@ var chan = (function() {
         fb.csp$Core$count = function(o) {
             return o.buffer.length;
         };
-        var DroppingBuffer = function(buffer, n) {
+        types.DroppingBuffer = function(buffer, n) {
             this.buffer = buffer;
             this.n = n;
         };
-        var db = DroppingBuffer.prototype;
+        var db = types.DroppingBuffer.prototype;
         db.csp$channel$Buffer$full = function(b) {
             return false;
         };
@@ -310,11 +312,11 @@ var chan = (function() {
         db.csp$Core$count = function(o) {
             return o.buffer.length;
         };
-        var SlidingBuffer = function(buffer, n) {
+        types.SlidingBuffer = function(buffer, n) {
             this.buffer = buffer;
             this.n = n;
         };
-        var sb = SlidingBuffer.prototype;
+        var sb = types.SlidingBuffer.prototype;
         sb.csp$channel$Buffer$full = function(b) {
             return false;
         };
@@ -330,14 +332,9 @@ var chan = (function() {
         sb.csp$Core$count = function(o) {
             return o.buffer.length;
         };
-        return {
-            Fixed: FixedBuffer,
-            Dropping: DroppingBuffer,
-            Sliding: SlidingBuffer
-        };
-    })(impl);
+    })(chan.types, chan.impl);
 
-    var util = (function(){
+    chan.util = (function(){
         return {
             handler: function(f) {
                 return {
@@ -348,7 +345,7 @@ var chan = (function() {
         };
     })();
 
-    var show = (function(impl, handler, run, Buffers, box){
+    (function(chan, impl, handler, run, box){
         var nop = function() {return null; };
 
         var random_array = function(n) {
@@ -383,120 +380,86 @@ var chan = (function() {
                 }
             };
         };
-        return {
-            chan: function(buffer) {
-                return new Channel([], [], buffer, null);
-            },
-            take: function(port, fn1, on_caller) {
-                on_caller = on_caller || true;
-                var ret = impl.take(port, handler(fn1));
-                if (ret) {
-                    var val = impl.deref(ret);
-                    if (on_caller) {
-                        fn1(val);
-                    } else {
-                        run(function() { return fn1(val);});
-                    }
-                }
-                return null;
-            },
-            put: function(port, val, fn0, on_caller) {
-                fn0 = fn0 || nop;
-                on_caller = on_caller || true;
-                var ret = impl.put(port, val, handler(fn0));
-                if (ret && (fn0  !== nop)) {
-                    if (on_caller) {
-                        fn0();
-                    } else {
-                        run(fn0);
-                    }
-                }
-                return null;
-            },
-            close: function(port) {
-                return impl.close(port);
-            },
-            closed: function(port) {
-                return impl.closed(port);
-            },
-            alts: function(ports, fret, options) {
-                options = options || {};
-                var flag = alt_flag(), 
-                    n = ports.length, 
-                    idxs = random_array(n),
-                    priority = (options.hasOwnProperty('priority')),
-                    ret, i, idx, wport, port, val, h, vbox;
-                for(i = 0; i < n; i++) {
-                    idx = priority ? i : idxs[i];
-                    port = ports[idx];
-                    wport = (port.constructor === Array) ? port[0] : null;
-                    h = (function(wport, port){
-                        if (wport) {
-                            return alt_handler(flag, function() { return fret(null, wport);});
-                        }
-                        return alt_handler(flag, function(v) { return fret(v, port);});
-                    })(wport, port);
-                    if (wport) {
-                        vbox = impl.put(wport, port[1], h);
-                    } else {
-                        vbox = impl.take(port, h);
-                    }
-                    if (vbox) {
-                        ret = box([impl.deref(vbox), (wport ? wport : port)]);
-                    }
-                }
-                if (ret) {
-                    return ret;
-                }
-                if (options.hasOwnProperty('default')) {
-                    if (impl.active(flag) && impl.commit(flag)) {
-                        box([options['default'], 'default']);
-                    }
-                }
-                return null;
-            },
-            fixed_buffer: function(n) {
-                return new Buffers.Fixed([], n);
-            },
-            dropping_buffer : function(n) {
-                return new Buffers.Dropping([], n);
-            },
-            sliding_buffer: function(n) {
-                return new Buffers.Sliding([], n);
-            }
+        chan.chan =function(buffer) {
+            return new chan.types.Channel([], [], buffer, null);
         };
-    })(impl, util.handler, dispatch.run, Buffers, box);
-    return {
-        "impl": {
-            "cleanup": impl.cleanup,
-            "take": impl.take,
-            "put": impl.put,
-            "close": impl.close,
-            "closed": impl.closed,
-            "full": impl.full,
-            "remove": impl.remove,
-            "add": impl.add,
-            "active": impl.active,
-            "commit": impl.commit,
-            "deref": impl.deref
-        },
-        "types": {
-            "Channel": Channel,
-            "FixedBuffer": Buffers.Fixed,
-            "DroppingBuffer": Buffers.Dropping,
-            "SlidingBuffer": Buffers.Sliding
-        },
-        "util": {
-            "handler": util.handler
-        },
-        "chan": show.chan,
-        "take": show.take,
-        "put": show.put,
-        "close": show.close,
-        "closed": show.closed,
-        "alts": show.alts,
-        "fixed_buffer": show.fixed_buffer,
-        "dropping_buffer": show.dropping_buffer,
-        "sliding_buffer": show.sliding_buffer
-    };
+        chan.take = function(port, fn1, on_caller) {
+            on_caller = on_caller || true;
+            var ret = impl.take(port, handler(fn1));
+            if (ret) {
+                var val = impl.deref(ret);
+                if (on_caller) {
+                    fn1(val);
+                } else {
+                    run(function() { return fn1(val);});
+                }
+            }
+            return null;
+        };
+        chan.put =  function(port, val, fn0, on_caller) {
+            fn0 = fn0 || nop;
+            on_caller = on_caller || true;
+            var ret = impl.put(port, val, handler(fn0));
+            if (ret && (fn0  !== nop)) {
+                if (on_caller) {
+                    fn0();
+                } else {
+                    run(fn0);
+                }
+            }
+            return null;
+        };
+        chan.close = function(port) {
+            return impl.close(port);
+        };
+        chan.closed = function(port) {
+            return impl.closed(port);
+        };
+        chan.alts = function(ports, fret, options) {
+            options = options || {};
+            var flag = alt_flag(), 
+                n = ports.length, 
+                idxs = random_array(n),
+                priority = (options.hasOwnProperty('priority')),
+                ret, i, idx, wport, port, val, h, vbox;
+            for(i = 0; i < n; i++) {
+                idx = priority ? i : idxs[i];
+                port = ports[idx];
+                wport = (port.constructor === Array) ? port[0] : null;
+                h = (function(wport, port){
+                    if (wport) {
+                        return alt_handler(flag, function() { return fret(null, wport);});
+                    }
+                    return alt_handler(flag, function(v) { return fret(v, port);});
+                })(wport, port);
+                if (wport) {
+                    vbox = impl.put(wport, port[1], h);
+                } else {
+                    vbox = impl.take(port, h);
+                }
+                if (vbox) {
+                    ret = box([impl.deref(vbox), (wport ? wport : port)]);
+                }
+            }
+            if (ret) {
+                return ret;
+            }
+            if (options.hasOwnProperty('default')) {
+                if (impl.active(flag) && impl.commit(flag)) {
+                    box([options['default'], 'default']);
+                }
+            }
+            return null;
+        };
+        chan.fixed_buffer = function(n) {
+            return new chan.types.FixedBuffer([], n);
+        };
+        chan.dropping_buffer = function(n) {
+            return new chan.types.DroppingBuffer([], n);
+        };
+        chan.sliding_buffer = function(n) {
+            return new chan.types.SlidingBuffer([], n);
+        };
+    })(chan, chan.impl, chan.util.handler, dispatch.run, box);
+    return chan;
 })();
