@@ -20,166 +20,138 @@ var protocol_error = function(name, o) {
     }
     return new Error(["No protocol method ", name, " defined for type ", type, ": ", o].join(""));
 };
-var protocols = {
-    /**
-     * Multi Message Channel protocol for cleanup of various take / put callbacks.
-     */
-    MMC: {
-        /**
-         * Removes any inactive put and take requests.
-         */
-        cleanup: function(o) {
-            if (o && o.csp$channel$MMC$cleanup) {
-                return o.csp$channel$MMC$cleanup(o);
-            }
-            throw protocol_error('csp.channel.MMC/cleanup', o);
-        }
-    },
-    /**
-     * Read port for a channel (taking values from a channel with a callback).
-     */
-    ReadPort: {
-        /**
-         * Puts a take callback on a channel.  The take request is parked (waiting for a put request) if there in no put request
-         * enqued.  If the channel is closed the callback is called with a null value.
-         */
-        take: function(o, handler) {
-            if (o && o.csp$channel$ReadPort$take) {
-                return o.csp$channel$ReadPort$take(o, handler);
-            }
-            throw protocol_error('csp.channel.ReadPort/take', o);
-        }
-    },
-    /**
-     * Write port for a channel (putting values on a channel with a callback).
-     */
-    WritePort: {
-        /**
-         * Puts a put callback and value on a channel.  If no take callbacks are the the put request is parked
-         * (waiting for a take request).  The value cannot be null.
-         */
-        put: function(o, val, handler) {
-            if (o && o.csp$channel$WritePort$put) {
-                return o.csp$channel$WritePort$put(o, val, handler);
-            }
-            throw protocol_error('csp.channel.WritePort/put', o);
-        }
-    },
-    /**
-     * Channel protocol for closing and check if a channel is closed.
-     */
-    Channel: {
-        /**
-         * Closes a channel.  All parked take rcllbacks are called with null values.
-         */
-        close: function(o) {
-            if (o && o.csp$channel$Channel$close) {
-                return o.csp$channel$Channel$close(o);
-            }
-            throw protocol_error('csp.channel.Channel/close', o);
-        },
-        /**
-         * Returns if a channel is closed.
-         */
-        closed: function(o) {
-            if (o && o.csp$channel$Channel$closed) {
-                return o.csp$channel$Channel$closed(o);
-            }
-            throw protocol_error('csp.channel.Channel/closed', o);
-        }
-    },
-    Buffer: {
-        /**
-         * Checks if a buffer is full.
-         */
-        full: function(o) {
-            if (o && o.csp$channel$Buffer$full) {
-                return o.csp$channel$Buffer$full(o);
-            }
-            throw protocol_error('csp.channel.Buffer/full', o);
-        },
-        /**
-         * Removes a value from the buffer and returns it.
-         */
-        remove: function(o) {
-            if (o && o.csp$channel$Buffer$remove) {
-                return o.csp$channel$Buffer$remove(o);
-            }
-            throw protocol_error('csp.channel.Buffer/remove', o);
-        },
-        /**
-         * Adds a value to the buffer and returns it.
-         */
-        add: function(o, item) {
-            if (o && o.csp$channel$Buffer$add) {
-                return o.csp$channel$Buffer$add(o, item);
-            }
-            throw protocol_error('csp.channel.Buffer/add', o);
-        }
-    },
-    /**
-     * Handler for channel callbacks to check if they are still atcive.
-     */
-    Handler: {
-        /**
-         * Checks if the callback in a channel is active
-         */
-        active: function(o) {
-            if (o && o.csp$channel$Handler$active) {
-                return o.csp$channel$Handler$active(o);
-            }
-            throw protocol_error('csp.channel.Handler/active', o);
-        },
-        /**
-         * Returns the callback function contained in the handler.
-         */
-        commit: function(o) {
-            if (o && o.csp$channel$Handler$commit) {
-                return o.csp$channel$Handler$commit(o);
-            }
-            throw protocol_error('csp.channel.Handler/commit', o);
-        }
-    },
-    /**
-     * Base protocols for channel library.
-     */
-    Core: {
-        /**
-         * Derefences a reference value.
-         */
-        deref: function(o) {
-            if (o && o.csp$Core$deref) {
-                return o.csp$Core$deref(o);
-            }
-            throw protocol_error('csp.Core/deref', o);
-        },
-        /**
-         * Gets the number of items in a collection.
-         */
-        count: function(o) {
-            if (o && o.csp$Core$count) {
-                return o.csp$Core$count(o);
-            }
-            throw protocol_error('csp.Core/count', o);
-        }
-    },
+chan.impl = {};
+/**
+ * MMC
+ * Multi Message Channel protocol for cleanup of various take / put callbacks.
+ * ---------
+ * Removes any inactive put and take requests.
+ */
+chan.impl.cleanup = function(o) {
+    if (o && o.csp$channel$MMC$cleanup) {
+        return o.csp$channel$MMC$cleanup(o);
+    }
+    throw protocol_error('csp.channel.MMC/cleanup', o);
 };
 /**
- * Flattened list of protocol implementations.
+ * ReadPort
+ * Read port for a channel (taking values from a channel with a callback).
+ * ----------
+ * Puts a take callback on a channel.  The take request is parked (waiting for a put request) if there in no put request
+ * enqued.  If the channel is closed the callback is called with a null value.
  */
-chan.impl = (function(p){
-    var i,j, impl = {};
-    for(i in p) {
-        if (p.hasOwnProperty(i)) {
-            for (j in p[i]) {
-                if (p[i].hasOwnProperty(j)) {
-                    impl[j] = p[i][j];
-                }
-            }
-        }
+chan.impl.take = function(o, handler) {
+    if (o && o.csp$channel$ReadPort$take) {
+        return o.csp$channel$ReadPort$take(o, handler);
     }
-    return impl;
-})(protocols);
+    throw protocol_error('csp.channel.ReadPort/take', o);
+};
+/**
+ * WritePort
+ * Write port for a channel (putting values on a channel with a callback).
+ * ---------
+ * Puts a put callback and value on a channel.  If no take callbacks are the the put request is parked
+ * (waiting for a take request).  The value cannot be null.
+ */
+chan.impl.put = function(o, val, handler) {
+    if (o && o.csp$channel$WritePort$put) {
+        return o.csp$channel$WritePort$put(o, val, handler);
+    }
+    throw protocol_error('csp.channel.WritePort/put', o);
+};
+/**
+ * Channel
+ * Channel protocol for closing and check if a channel is closed.
+ * ---------
+ * Closes a channel.  All parked take rcllbacks are called with null values.
+ */
+chan.impl.close = function(o) {
+    if (o && o.csp$channel$Channel$close) {
+        return o.csp$channel$Channel$close(o);
+    }
+    throw protocol_error('csp.channel.Channel/close', o);
+};
+/**
+ * Returns if a channel is closed.
+ */
+chan.impl.closed = function(o) {
+    if (o && o.csp$channel$Channel$closed) {
+        return o.csp$channel$Channel$closed(o);
+    }
+    throw protocol_error('csp.channel.Channel/closed', o);
+};
+/**
+ * Buffer
+ * Buffer protocols for buffer management.
+ * ---------
+ * Checks if a buffer is full.
+ */
+chan.impl.full = function(o) {
+    if (o && o.csp$channel$Buffer$full) {
+        return o.csp$channel$Buffer$full(o);
+    }
+    throw protocol_error('csp.channel.Buffer/full', o);
+};
+/**
+ * Removes a value from the buffer and returns it.
+ */
+chan.impl.remove = function(o) {
+    if (o && o.csp$channel$Buffer$remove) {
+        return o.csp$channel$Buffer$remove(o);
+    }
+    throw protocol_error('csp.channel.Buffer/remove', o);
+};
+/**
+ * Adds a value to the buffer and returns it.
+ */
+chan.impl.add = function(o, item) {
+    if (o && o.csp$channel$Buffer$add) {
+        return o.csp$channel$Buffer$add(o, item);
+    }
+    throw protocol_error('csp.channel.Buffer/add', o);
+};
+/**
+ * Handler
+ * Handler for channel callbacks to check if they are still atcive.
+ * ---------
+ * Checks if the callback in a channel is active
+ */
+chan.impl.active = function(o) {
+    if (o && o.csp$channel$Handler$active) {
+        return o.csp$channel$Handler$active(o);
+    }
+    throw protocol_error('csp.channel.Handler/active', o);
+};
+/**
+ * Returns the callback function contained in the handler.
+ */
+chan.impl.commit = function(o) {
+    if (o && o.csp$channel$Handler$commit) {
+        return o.csp$channel$Handler$commit(o);
+    }
+    throw protocol_error('csp.channel.Handler/commit', o);
+};
+/**
+ * Core
+ * Base protocols for channel library.
+ * ---------
+ * Derefences a reference value.
+ */
+chan.impl.deref = function(o) {
+    if (o && o.csp$Core$deref) {
+        return o.csp$Core$deref(o);
+    }
+    throw protocol_error('csp.Core/deref', o);
+};
+/**
+ * Gets the number of items in a collection.
+ */
+chan.impl.count = function(o) {
+    if (o && o.csp$Core$count) {
+        return o.csp$Core$count(o);
+    }
+    throw protocol_error('csp.Core/count', o);
+};
 /**
  * Makes a value a reference value.
  */
