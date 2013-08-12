@@ -1,0 +1,24 @@
+{
+  "name": "csp-channel",
+  "version": "0.0.5",
+  "description": "CSP channels for javascript",
+  "author": {
+    "name": "Peter Schuck",
+    "email": "peter.schuck@johnsonfit.com"
+  },
+  "scripts": {
+    "build": "./scripts/build-dev"
+  },
+  "dependencies": {
+  },
+  "devDependencies": {
+  },
+  "licenses": [
+    {
+      "type": "MIT"
+    }
+  ],
+  "files": [
+    "src"
+  ]
+}
