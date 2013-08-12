@@ -1,4 +1,4 @@
-(function(definition){if(typeof exports==="object"){module.exports=definition();}else if(typeof define==="function"&&define.amd){define(definition);}else{channel=definition();}})(function(){return function(){
+(function(definition){if(typeof exports==="object"){module.exports=definition();}else if(typeof define==="function"&&define.amd){define(definition);}else{csp_channel=definition();}})(function(){return function(){
 'use strict';
 /** @type {Object} */
 var chan = {};
@@ -637,4 +637,4 @@ chan.util = (function(){
     };
 })(chan, chan.impl, chan.util.handler, dispatch.run, box);
 return chan;
-;return this.channel;}.call({});});
+;return this.csp_channel;}.call({});});

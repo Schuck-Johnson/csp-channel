@@ -1,1 +1,1 @@
-;return this.channel;}.call({});});
+;return this.csp_channel;}.call({});});
