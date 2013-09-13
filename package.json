@@ -1,13 +1,16 @@
 {
   "name": "csp-channel",
-  "version": "0.0.5",
+  "version": "0.0.10",
+  "main": "channel.js",
   "description": "CSP channels for javascript",
+  "keywords": ["CSP", "channel", "async", "client", "browser"],
+  "repository": {"type": "git", "url": "git://://github.com/Schuck-Johnson/csp-channel.git"},
   "author": {
     "name": "Peter Schuck",
     "email": "peter.schuck@johnsonfit.com"
   },
   "scripts": {
-    "build": "./scripts/build-dev"
+    "build": "./scripts/build-dev.sh; ./scripts/build.sh; ./scripts/build-prod.sh;"
   },
   "dependencies": {
   },
@@ -15,10 +18,13 @@
   },
   "licenses": [
     {
-      "type": "MIT"
+      "type": "MIT",
+      "url": "https://raw.github.com/Schuck-Johnson/csp-channel/master/LICENSE"
     }
   ],
   "files": [
-    "src"
+    "channel.dev.js",
+    "channel.js",
+    "channel.prod.js"
   ]
 }
