@@ -328,6 +328,19 @@ chan.util = function() {
   };
   a.sliding_buffer = function(b) {
     return new a.types.SlidingBuffer([], b)
+  };
+  a.timeout = function(b) {
+    var c = a.chan();
+    setTimeout(function() {
+      a.close(c)
+    }, b);
+    return c
+  };
+  a.loop = function() {
+    var a = Array.prototype.slice.call(arguments), b = a.pop(), c = function() {
+      b.apply(null, [c].concat(Array.prototype.slice.call(arguments)))
+    };
+    c.apply(null, a)
   }
 })(chan, chan.impl, chan.util.handler, dispatch.run, box);
 

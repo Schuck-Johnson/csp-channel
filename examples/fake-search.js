@@ -1,15 +1,8 @@
 var chan = csp_channel;
-var timeout = function(msecs) {
-    var ch = chan.chan();
-    setTimeout(function() {
-        chan.close(ch);
-    }, msecs);
-    return ch;
-};
 
 var fake_search = function(kind) {
     return function(c, query) {
-        var tc = timeout(Math.floor(Math.random() * 100));
+        var tc = chan.timeout(Math.floor(Math.random() * 100));
         chan.take(tc, function() {
             chan.put(c, [kind, query]);
         });
@@ -37,7 +30,7 @@ var fastest = function() {
 
 var google = function(query) {
     var c = chan.chan(),
-        t = timeout(80),
+        t = chan.timeout(80),
         ret = [], i;
     chan.take(fastest(query, web1, web2), function(v) { return chan.put(c, v);});
     chan.take(fastest(query, image1, image2), function(v) { return chan.put(c, v);});

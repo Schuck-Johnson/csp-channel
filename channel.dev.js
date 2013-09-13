@@ -604,5 +604,26 @@ chan.util = (function(){
     chan.sliding_buffer = function(n) {
         return new chan.types.SlidingBuffer([], n);
     };
+    /**
+      * Creates a timeout channel
+      */
+    chan.timeout = function(msecs) {
+        var ch = chan.chan();
+        setTimeout(function() {
+            chan.close(ch);
+        }, msecs);
+        return ch;
+    };
+    /**
+      * Creates a primitive looping construct to make local event loops
+      */
+    chan.loop = function() {
+        var args = Array.prototype.slice.call(arguments),
+            fn = args.pop(),
+            recur = function() {
+                fn.apply(null, [recur].concat(Array.prototype.slice.call(arguments)));
+            };
+        recur.apply(null, args);
+    };
 })(chan, chan.impl, chan.util.handler, dispatch.run, box);
 return chan;}.call({});});
