@@ -254,7 +254,6 @@ chan.types = {};
                 }
             }
         }
-        return null;
     };
     /**
      * Channels ReadPort take protocol method.
@@ -294,7 +293,6 @@ chan.types = {};
                 }
             }
         }
-        return null;
     };
     /**
      * Channels Channel close protocol method.
@@ -317,7 +315,6 @@ chan.types = {};
             }
             return null;
         }
-        return null;
     };
     /**
      * Channels Channel closed protocol method.
@@ -554,8 +551,8 @@ chan.util = (function(){
      */
     chan.alts = function(ports, fret, options) {
         options = options || {};
-        var flag = alt_flag(), 
-            n = ports.length, 
+        var flag = alt_flag(),
+            n = ports.length,
             idxs = random_array(n),
             priority = (options.hasOwnProperty('priority')),
             ret, i, idx, wport, port, val, h, vbox;
@@ -607,4 +604,3 @@ chan.util = (function(){
         return new chan.types.SlidingBuffer([], n);
     };
 })(chan, chan.impl, chan.util.handler, dispatch.run, box);
-return chan;
