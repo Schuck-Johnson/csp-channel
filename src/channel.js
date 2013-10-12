@@ -609,10 +609,10 @@ chan.util = (function(){
     chan.closed = function(port) {
         return impl.closed(port);
     };
-    /**
-     * Frontend api for taking or putting a value across multiple channels.
+    /*
+     * Base function for taking / putting on multiple channels
      */
-    chan.alts = function(ports, fret, options) {
+    chan.do_alts = function(ports, fret, options) {
         options = options || {};
         var flag = alt_flag(),
             n = ports.length,
@@ -643,7 +643,23 @@ chan.util = (function(){
         }
         if (options.hasOwnProperty('default')) {
             if (impl.active(flag) && impl.commit(flag)) {
-                box([options['default'], 'default']);
+                return box([options['default'], 'default']);
+            }
+        }
+        return null;
+    };
+    /**
+     * Frontend api for taking or putting a value across multiple channels.
+     */
+    chan.alts = function(ports, fret, options, on_caller) {
+        on_caller = on_caller || true;
+        var ret = chan.do_alts(ports, fret, options);
+        if (ret) {
+            var vchan = impl.deref(ret);
+            if (on_caller) {
+                fret(vchan[0], vchan[1]);
+            } else {
+                run(function() { return fret(vchan[0], vchan[1]);});
             }
         }
         return null;

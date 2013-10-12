@@ -97,24 +97,24 @@ chan.types = {};
     this.closed = null
   };
   a = a.Channel.prototype;
-  a.csp$channel$WritePort$put = function(a, p, k) {
+  a.csp$channel$WritePort$put = function(a, p, h) {
     if(null === p) {
       throw Error("Cant put null in a channel");
     }
-    if(a.closed || !b.active(k)) {
+    if(a.closed || !b.active(h)) {
       return d(null)
     }
-    for(var g, l, h = !0;h;) {
-      if(h = !1, l = a.takes.pop(a.takes), null !== l) {
+    for(var g, l, k = !0;k;) {
+      if(k = !1, l = a.takes.pop(a.takes), null !== l) {
         if(b.active(l)) {
-          return g = b.commit(l), b.commit(k), c.run(function() {
+          return g = b.commit(l), b.commit(h), c.run(function() {
             return g(p)
           }), d(null)
         }
-        h = !0
+        k = !0
       }else {
         if(a.buffer && !b.full(a.buffer)) {
-          return b.commit(k), b.add(a.buffer, p), d(null)
+          return b.commit(h), b.add(a.buffer, p), d(null)
         }
         if(64 < a.dirty_puts) {
           a.dirty_puts = 0, a.puts.cleanup(a.puts, f)
@@ -123,7 +123,7 @@ chan.types = {};
             throw Error("No more than 1024 pending takes on a single channel");
           }
         }
-        a.puts.unbounded_unshift(a.puts, new e(k, p))
+        a.puts.unbounded_unshift(a.puts, new e(h, p))
       }
     }
   };
@@ -178,9 +178,9 @@ chan.types = {};
     this.len = c;
     this.arr = d
   };
-  var d = function(a, b, c, d, k) {
+  var d = function(a, b, c, d, h) {
     var g;
-    for(g = 0;g < k;g++) {
+    for(g = 0;g < h;g++) {
       c[d + g] = a[b + g]
     }
   }, c = a.RingBuffer.prototype;
@@ -302,7 +302,7 @@ chan.util = function() {
       a = null;
       return!0
     }}
-  }, k = function(a, c) {
+  }, h = function(a, c) {
     return{csp$channel$Handler$active:function(c) {
       return b.active(a)
     }, csp$channel$Handler$commit:function(d) {
@@ -313,20 +313,20 @@ chan.util = function() {
   a.chan = function(b) {
     return new a.types.Channel(a.ring_buffer(32), 0, a.ring_buffer(32), 0, b, null)
   };
-  a.take = function(a, l, h) {
-    h = h || !0;
+  a.take = function(a, l, k) {
+    k = k || !0;
     if(a = b.take(a, d(l))) {
       var e = b.deref(a);
-      h ? l(e) : c(function() {
+      k ? l(e) : c(function() {
         return l(e)
       })
     }
     return null
   };
-  a.put = function(a, e, h, k) {
-    h = h || f;
-    k = k || !0;
-    b.put(a, e, d(h)) && h !== f && (k ? h() : c(h));
+  a.put = function(a, l, k, e) {
+    k = k || f;
+    e = e || !0;
+    b.put(a, l, d(k)) && k !== f && (e ? k() : c(k));
     return null
   };
   a.close = function(a) {
@@ -335,22 +335,28 @@ chan.util = function() {
   a.closed = function(a) {
     return b.closed(a)
   };
-  a.alts = function(a, c, d) {
+  a.do_alts = function(a, c, d) {
     d = d || {};
     var f = p(), t = a.length, v = u(t), w = d.hasOwnProperty("priority"), s, q, m, n, r;
     for(q = 0;q < t;q++) {
       m = w ? q : v[q], n = a[m], m = n.constructor === Array ? n[0] : null, r = function(a, b) {
-        return a ? k(f, function() {
+        return a ? h(f, function() {
           return c(null, a)
-        }) : k(f, function(a) {
+        }) : h(f, function(a) {
           return c(a, b)
         })
       }(m, n), (r = m ? b.put(m, n[1], r) : b.take(n, r)) && (s = e([b.deref(r), m ? m : n]))
     }
-    if(s) {
-      return s
+    return s ? s : d.hasOwnProperty("default") && b.active(f) && b.commit(f) ? e([d["default"], "default"]) : null
+  };
+  a.alts = function(g, d, e, f) {
+    f = f || !0;
+    if(g = a.do_alts(g, d, e)) {
+      var h = b.deref(g);
+      f ? d(h[0], h[1]) : c(function() {
+        return d(h[0], h[1])
+      })
     }
-    d.hasOwnProperty("default") && b.active(f) && b.commit(f) && e([d["default"], "default"]);
     return null
   };
   a.fixed_buffer = function(b) {
