@@ -21,18 +21,6 @@ var protocol_error = function(name, o) {
 };
 chan.impl = {};
 /**
- * MMC
- * Multi Message Channel protocol for cleanup of various take / put callbacks.
- * ---------
- * Removes any inactive put and take requests.
- */
-chan.impl.cleanup = function(o) {
-    if (o && o.csp$channel$MMC$cleanup) {
-        return o.csp$channel$MMC$cleanup(o);
-    }
-    throw protocol_error('csp.channel.MMC/cleanup', o);
-};
-/**
  * ReadPort
  * Read port for a channel (taking values from a channel with a callback).
  * ----------
@@ -111,7 +99,7 @@ chan.impl.add = function(o, item) {
 };
 /**
  * Handler
- * Handler for channel callbacks to check if they are still atcive.
+ * Handler for channel callbacks to check if they are still active.
  * ---------
  * Checks if the callback in a channel is active
  */
@@ -179,44 +167,29 @@ var dispatch = (function() {
  */
 chan.types = {};
 (function(types, impl, box, dispatch) {
+    var PutBox = function(handler, val) {
+        this.handler = handler;
+        this.val = val;
+    };
+    var put_active = function(box) {
+        return impl.active(box.handler);
+    };
     /**
      * Multi Message Channel type with buffer.
      */
-    types.Channel = function(takes, puts, buffer, closed) {
+    types.Channel = function(takes, dirty_takes, puts, dirty_puts, buffer, closed) {
         this.takes = takes;
+        this.dirty_takes = dirty_takes;
         this.puts = puts;
+        this.dirty_puts = dirty_puts;
         this.buffer = buffer;
-        this.closed = {csp$Core$deref: function() { return closed;}};
+        this.closed = null;
     };
     //Channels prototype
     var p = types.Channel.prototype;
-    /**
-     * Channels Channel cleanup protocol method.
-     */
-    p.csp$channel$MMC$cleanup = function(o) {
-        var i, item, tlen = o.takes.length, plen = o.puts.length;
-        i = 0;
-        while (i < plen) {
-            item = o.puts[i][0];
-            if (! impl.active(item)) {
-                o.puts.splice(i, 1);
-                plen--;
-            } else {
-                i++;
-            }
-        }
-        i = 0;
-        while(i < tlen) {
-            item = o.takes[i];
-            if (! impl.active(item)) {
-                o.takes.splice(i, 1);
-                tlen--;
-            } else {
-                i++;
-            }
-        }
-        return null;
-    };
+
+    var MAX_DIRTY = 64;
+    var MAX_QUEUE_SIZE = 1024;
     /**
      * Channels WritePort put protocol method.
      */
@@ -224,33 +197,39 @@ chan.types = {};
         if (val === null) {
             throw (new Error("Cant put null in a channel"));
         }
-        impl.cleanup(o);
-        if (impl.closed(o)) {
+        if (o.closed || ! impl.active(handler)) {
             return box(null);
         } else {
-            var take_cb, put_cb, taker, i, tlen = o.takes.length;
-            for (i = 0; i < tlen; i++) {
-                taker = o.takes[i];
-                if (impl.active(taker) && impl.active(handler)) {
-                    o.takes.splice(i, 1);
-                    take_cb = impl.commit(taker);
-                    put_cb = impl.commit(handler);
-                    break;
-                }
-            }
-            if (take_cb && put_cb) {
-                dispatch.run(function() { return take_cb(val);});
-                return box(null);
-            } else {
-                if (o.buffer && (! impl.full(o.buffer))) {
-                    if (impl.active(handler) && impl.commit(handler)) {
+            var take_cb, put_cb, taker, i, loop = true;
+            while(loop) {
+                loop = false;
+                taker = o.takes.pop(o.takes);
+                if (taker !== null) {
+                    if (impl.active(taker)) {
+                        take_cb = impl.commit(taker);
+                        impl.commit(handler);
+                        dispatch.run(function() { return take_cb(val);});
+                        return box(null);
+                    } else {
+                        loop = true;
+                    }
+                } else {
+                    if (o.buffer && (! impl.full(o.buffer))) {
+                        impl.commit(handler);
                         impl.add(o.buffer, val);
                         return box(null);
+                    } else {
+                        if (o.dirty_puts > MAX_DIRTY) {
+                            o.dirty_puts = 0;
+                            o.puts.cleanup(o.puts, put_active);
+                        } else {
+                            o.dirty_puts = o.dirty_puts + 1;
+                            if (o.puts.len > MAX_QUEUE_SIZE) {
+                                throw (new Error(['No more than ', MAX_QUEUE_SIZE, ' pending takes on a single channel'].join('')));
+                            }
+                        }
+                        o.puts.unbounded_unshift(o.puts, new PutBox(handler, val));
                     }
-                    return null;
-                } else {
-                    o.puts.unshift([handler, val]);
-                    return null;
                 }
             }
         }
@@ -259,37 +238,45 @@ chan.types = {};
      * Channels ReadPort take protocol method.
      */
     p.csp$channel$ReadPort$take = function(o, handler) {
-        impl.cleanup(o);
-        if (o.buffer && (impl.count(o.buffer) > 0)) {
-            if (impl.active(handler) && impl.commit(handler)) {
-                return box(impl.remove(o.buffer));
-            }
+        if (! impl.active(handler)) {
             return null;
+        }
+        if (o.buffer && (impl.count(o.buffer) > 0)) {
+            impl.commit(handler);
+            return box(impl.remove(o.buffer));
         } else {
-            var take_cb, put_cb, val, putter, i, plen = o.puts.length;
-            for (i = 0; i < plen; i++) {
-                putter = o.puts[i][0];
-                if (impl.active(putter) && impl.active(handler)) {
-                    o.takes.splice(i, 1);
-                    take_cb = impl.commit(handler);
-                    put_cb = impl.commit(putter);
-                    val = o.puts[i][1];
-                    break;
-                }
-            }
-
-            if (take_cb && put_cb) {
-                dispatch.run(put_cb);
-                return box(val);
-            } else {
-                if (impl.closed(o)) {
-                    if (impl.active(handler) && impl.commit(handler)) {
-                        return box(null);
+            var put_handler, put_cb, val, putter, loop = true;
+            while(loop) {
+                loop = false;
+                putter = o.puts.pop(o.puts);
+                if (putter !== null) {
+                    put_handler = putter.handler;
+                    val = putter.val;
+                    if (impl.active(put_handler)) {
+                        put_cb = impl.commit(put_handler);
+                        impl.commit(handler);
+                        dispatch.run(put_cb);
+                        return box(val);
+                    } else {
+                        loop = true;
                     }
-                    return null;
                 } else {
-                    o.takes.unshift(handler);
-                    return null;
+                    if (o.closed) {
+                        impl.commit(handler);
+                        return box(null);
+                    } else {
+                        if (o.dirty_takes > MAX_DIRTY) {
+                            o.dirty_takes = 0;
+                            o.takes.cleanup(o.takes, impl.active);
+                        } else {
+                            o.dirty_takes = o.dirty_takes + 1;
+                        }
+                        if (o.takes.len > MAX_QUEUE_SIZE) {
+                            throw (new Error(['No more than ', MAX_QUEUE_SIZE, ' pending takes on a single channel'].join('')));
+                        }
+                        o.takes.unbounded_unshift(o.takes, handler);
+                        return null;
+                    }
                 }
             }
         }
@@ -298,20 +285,21 @@ chan.types = {};
      * Channels Channel close protocol method.
      */
     p.csp$channel$Channel$close = function(o) {
-        impl.cleanup(o);
-        if (impl.closed(o)) {
+        if (o.closed) {
             return null;
         } else {
-            o.closed = {csp$Core$deref: function() { return true;}};
-            var taker, take_cb, i, tlen = o.takes.length;
-            for (i = 0; i < tlen; i++) {
-                taker = o.takes[i];
-                take_cb = (impl.active(taker) && impl.commit(taker));
-                (function(take_cb){
-                    if (take_cb) {
+            o.closed = true;
+            var taker, take_cb, i, loop = true;
+            while(loop) {
+                loop = false;
+                taker = o.takes.pop(o.takes);
+                if (taker !== null) {
+                    if (impl.active(taker)) {
+                        take_cb = impl.commit(taker);
                         dispatch.run(function() { return take_cb(null); });
                     }
-                })(take_cb);
+                    loop = true;
+                }
             }
             return null;
         }
@@ -320,11 +308,82 @@ chan.types = {};
      * Channels Channel closed protocol method.
      */
     p.csp$channel$Channel$closed = function(o) {
-        return impl.deref(o.closed) === true;
+        return o.closed === true;
     };
 })(chan.types, chan.impl, box, dispatch);
 
 (function(types, impl){
+    types.RingBuffer = function(head, tail, len, arr) {
+        this.head = head;
+        this.tail = tail;
+        this.len = len;
+        this.arr = arr;
+    };
+
+    var acopy = function(src, src_start, dest, dest_start, len) {
+        var cnt;
+        for (cnt = 0; cnt < len; cnt++) {
+            dest[(dest_start + cnt)] = src[(src_start + cnt)];
+        }
+    };
+
+    var rb = types.RingBuffer.prototype;
+
+    rb.pop = function(o) {
+        if (o.len === 0) {
+            return null;
+        }
+        var x = o.arr[o.tail];
+        o.arr[o.tail] = null;
+        o.tail = (o.tail + 1) % o.arr.length;
+        o.len = o.len - 1;
+        return x;
+    };
+
+    rb.unshift = function(o, val) {
+        o.arr[o.head] = val;
+        o.head = (o.head + 1) % o.arr.length;
+        o.len = o.len + 1;
+        return null;
+    };
+
+    rb.unbounded_unshift = function(o, val) {
+        if ((o.len + 1) === o.arr.length) {
+            o.resize(o);
+        }
+        return o.unshift(o, val);
+    };
+
+    rb.resize = function(o) {
+        var new_size = o.arr.length * 2,
+            new_array = new Array(new_size);
+        if (o.tail < o.head) {
+            acopy(o.arr, o.tail, new_array, 0, o.len);
+            o.tail = 0;
+            o.head = o.len;
+            o.arr = new_array;
+        } else if (o.tail > o.head) {
+            acopy(o.arr, o.tail, new_array, 0, (o.arr.length - o.tail), o.tail);
+            acopy(o.arr, 0, new_array, (o.arr.length - o.tail), o.head);
+            o.tail = 0;
+            o.head = o.len;
+            o.arr = new_array;
+        } else {
+            o.tail = 0;
+            o.head = 0;
+            o.arr = new_array;
+        }
+    };
+
+    rb.cleanup = function(o, keep) {
+        var i, val;
+        for (i = 0; i < o.len; o++) {
+            val = o.pop(o);
+            if (keep(val)) {
+                o.unshift(o, val);
+            }
+        }
+    };
     /**
      * Fixed buffer type that can only hold a fixed number of items.
      */
@@ -338,13 +397,13 @@ chan.types = {};
      * FixedBuffer Buffer full protocol method.
      */
     fb.csp$channel$Buffer$full = function(b) {
-        return (b.buffer.length === b.n);
+        return (b.buffer.len === b.n);
     };
     /**
      * FixedBuffer Buffer remove protocol method.
      */
     fb.csp$channel$Buffer$remove = function(b) {
-        return b.buffer.pop();
+        return b.buffer.pop(b.buffer);
     };
     /**
      * FixedBuffer Buffer add protocol method.
@@ -353,13 +412,13 @@ chan.types = {};
         if (impl.full(b)) {
             throw (new Error("Can't add to a full buffer"));
         }
-        return b.buffer.unshift(item);
+        return b.buffer.unshift(b.buffer, item);
     };
     /**
      * FixedBuffer Buffer count protocol method.
      */
     fb.csp$Core$count = function(o) {
-        return o.buffer.length;
+        return o.buffer.len;
     };
     /**
      * Dropping buffer type that drops any items added after it is full.
@@ -380,14 +439,14 @@ chan.types = {};
      * DroppingBuffer Buffer remove protocol method.
      */
     db.csp$channel$Buffer$remove = function(b) {
-        return b.buffer.pop();
+        return b.buffer.pop(b.buffer);
     };
     /**
      * DroppingBuffer Buffer add protocol method.
      */
     db.csp$channel$Buffer$add = function(b, item) {
-        if (b.buffer.length !== b.n) {
-            return b.buffer.unshift(item);
+        if (b.buffer.len !== b.n) {
+            return b.buffer.unshift(b.buffer, item);
         }
         return null;
     };
@@ -395,7 +454,7 @@ chan.types = {};
      * DroppingBuffer Buffer count protocol method.
      */
     db.csp$Core$count = function(o) {
-        return o.buffer.length;
+        return o.buffer.len;
     };
     /**
      * Sliding buffer type that drops the least recently add item when a new item is added and it is full.
@@ -416,24 +475,28 @@ chan.types = {};
      * Sliding Buffer remove protocol method.
      */
     sb.csp$channel$Buffer$remove = function(b) {
-        return b.buffer.pop();
+        return b.buffer.pop(b.buffer);
     };
     /**
      * Sliding Buffer add protocol method.
      */
     sb.csp$channel$Buffer$add = function(b, item) {
-        if (b.buffer.length === b.n) {
+        if (b.buffer.len === b.n) {
             impl.remove(b);
         }
-        return b.buffer.unshift(item);
+        return b.buffer.unshift(b.buffer, item);
     };
     /**
      * Sliding Buffer count protocol method.
      */
     sb.csp$Core$count = function(o) {
-        return o.buffer.length;
+        return o.buffer.len;
     };
 })(chan.types, chan.impl);
+
+chan.ring_buffer = function(n) {
+    return new chan.types.RingBuffer(0, 0, 0, new Array(n));
+};
 /**
  * Any channel utility functions
  */
@@ -500,7 +563,7 @@ chan.util = (function(){
      * Frontend api constructor for a Mutli message channel.
      */
     chan.chan = function(buffer) {
-        return new chan.types.Channel([], [], buffer, null);
+        return new chan.types.Channel(chan.ring_buffer(32), 0, chan.ring_buffer(32), 0, buffer, null);
     };
     /**
      * Frontend api for taking value from a channel.
@@ -589,19 +652,19 @@ chan.util = (function(){
      * Frontend api for creating a fixed buffer.
      */
     chan.fixed_buffer = function(n) {
-        return new chan.types.FixedBuffer([], n);
+        return new chan.types.FixedBuffer(chan.ring_buffer(n), n);
     };
     /**
      * Frontend api for creating a dropping buffer.
      */
     chan.dropping_buffer = function(n) {
-        return new chan.types.DroppingBuffer([], n);
+        return new chan.types.DroppingBuffer(chan.ring_buffer(n), n);
     };
     /**
      * Frontend api for creating a sliding buffer.
      */
     chan.sliding_buffer = function(n) {
-        return new chan.types.SlidingBuffer([], n);
+        return new chan.types.SlidingBuffer(chan.ring_buffer(n), n);
     };
     /**
       * Creates a timeout channel
