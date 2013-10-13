@@ -71,117 +71,18 @@ chan.impl.count = function(a) {
   }
   throw protocol_error("csp.Core/count", a);
 };
-var box = function(a) {
-  return{csp$Core$deref:function(b) {
-    return a
-  }}
-}, dispatch = function() {
-  return{run:function(a) {
-    setTimeout(a, 0)
-  }}
-}();
 chan.types = {};
-(function(a, b, d, c) {
-  var e = function(a, e) {
-    this.handler = a;
-    this.val = e
-  }, f = function(a) {
-    return b.active(a.handler)
-  };
-  a.Channel = function(a, e, b, g, l, f) {
-    this.takes = a;
-    this.dirty_takes = e;
-    this.puts = b;
-    this.dirty_puts = g;
-    this.buffer = l;
-    this.closed = null
-  };
-  a = a.Channel.prototype;
-  a.csp$channel$WritePort$put = function(a, p, h) {
-    if(null === p) {
-      throw Error("Cant put null in a channel");
-    }
-    if(a.closed || !b.active(h)) {
-      return d(null)
-    }
-    for(var g, l, k = !0;k;) {
-      if(k = !1, l = a.takes.pop(a.takes), null !== l) {
-        if(b.active(l)) {
-          return g = b.commit(l), b.commit(h), c.run(function() {
-            return g(p)
-          }), d(null)
-        }
-        k = !0
-      }else {
-        if(a.buffer && !b.full(a.buffer)) {
-          return b.commit(h), b.add(a.buffer, p), d(null)
-        }
-        if(64 < a.dirty_puts) {
-          a.dirty_puts = 0, a.puts.cleanup(a.puts, f)
-        }else {
-          if(a.dirty_puts += 1, 1024 < a.puts.len) {
-            throw Error("No more than 1024 pending takes on a single channel");
-          }
-        }
-        a.puts.unbounded_unshift(a.puts, new e(h, p))
-      }
-    }
-  };
-  a.csp$channel$ReadPort$take = function(a, e) {
-    if(!b.active(e)) {
-      return null
-    }
-    if(a.buffer && 0 < b.count(a.buffer)) {
-      return b.commit(e), d(b.remove(a.buffer))
-    }
-    var f, g;
-    for(f = !0;f;) {
-      if(g = a.puts.pop(a.puts), null !== g) {
-        f = g.handler;
-        g = g.val;
-        if(b.active(f)) {
-          return f = b.commit(f), b.commit(e), c.run(f), d(g)
-        }
-        f = !0
-      }else {
-        if(a.closed) {
-          return b.commit(e), d(null)
-        }
-        64 < a.dirty_takes ? (a.dirty_takes = 0, a.takes.cleanup(a.takes, b.active)) : a.dirty_takes += 1;
-        if(1024 < a.takes.len) {
-          throw Error("No more than 1024 pending takes on a single channel");
-        }
-        a.takes.unbounded_unshift(a.takes, e);
-        return null
-      }
-    }
-  };
-  a.csp$channel$Channel$close = function(a) {
-    if(!a.closed) {
-      a.closed = !0;
-      for(var e, f, g = !0;g;) {
-        g = !1, e = a.takes.pop(a.takes), null !== e && (b.active(e) && (f = b.commit(e), c.run(function() {
-          return f(null)
-        })), g = !0)
-      }
-    }
-    return null
-  };
-  a.csp$channel$Channel$closed = function(a) {
-    return!0 === a.closed
-  }
-})(chan.types, chan.impl, box, dispatch);
 (function(a, b) {
-  a.RingBuffer = function(a, b, c, d) {
+  a.RingBuffer = function(a, b, m, c) {
     this.head = a;
     this.tail = b;
-    this.len = c;
-    this.arr = d
+    this.len = m;
+    this.arr = c
   };
-  var d = function(a, b, c, d, h) {
-    var g;
-    for(g = 0;g < h;g++) {
-      c[d + g] = a[b + g]
+  var d = function(a, b, m, c, d) {
+    var f;
+    for(f = 0;f < d;f++) {
+      m[c + f] = a[b + f]
     }
   }, c = a.RingBuffer.prototype;
   c.pop = function(a) {
@@ -210,8 +111,8 @@ chan.types = {};
     a.arr = b
   };
   c.cleanup = function(a, b) {
-    for(var c;0 < a.len;a++) {
-      c = a.pop(a), b(c) && a.unshift(a, c)
+    for(var m;0 < a.len;a++) {
+      m = a.pop(a), b(m) && a.unshift(a, m)
     }
   };
   a.FixedBuffer = function(a, b) {
@@ -273,6 +174,130 @@ chan.types = {};
 chan.ring_buffer = function(a) {
   return new chan.types.RingBuffer(0, 0, 0, Array(a))
 };
+var box = function(a) {
+  return{csp$Core$deref:function(b) {
+    return a
+  }}
+}, dispatch = function(a) {
+  var b = !1, d = !1, c = a(32), n = function() {
+    b = !0;
+    d = !1;
+    for(var a = !0, g = 0;a && 1024 > g;) {
+      (a = c.pop(c)) && a(), g += 1
+    }
+    b = !1;
+    !(0 < c.len) || d && b || (d = !0, k())
+  }, k = function() {
+    if("undefined" !== typeof MessageChannel) {
+      var a = new MessageChannel;
+      a.port1.onmessage = function(a) {
+        n()
+      };
+      return function() {
+        a.port2.postMessage(0)
+      }
+    }
+    return"undefined" !== typeof setImmediate ? function() {
+      setImmediate(n)
+    } : function() {
+      setTimeout(n, 0)
+    }
+  }();
+  return{run:function(a) {
+    c.unbounded_unshift(c, a);
+    d && b || (d = !0, k())
+  }}
+}(chan.ring_buffer);
+(function(a, b, d, c) {
+  var n = function(a, b) {
+    this.handler = a;
+    this.val = b
+  }, k = function(a) {
+    return b.active(a.handler)
+  };
+  a.Channel = function(a, b, c, f, l, h) {
+    this.takes = a;
+    this.dirty_takes = b;
+    this.puts = c;
+    this.dirty_puts = f;
+    this.buffer = l;
+    this.closed = null
+  };
+  a = a.Channel.prototype;
+  a.csp$channel$WritePort$put = function(a, g, e) {
+    if(null === g) {
+      throw Error("Cant put null in a channel");
+    }
+    if(a.closed || !b.active(e)) {
+      return d(null)
+    }
+    for(var f, l, h = !0;h;) {
+      if(h = !1, l = a.takes.pop(a.takes), null !== l) {
+        if(b.active(l)) {
+          return f = b.commit(l), b.commit(e), c.run(function() {
+            return f(g)
+          }), d(null)
+        }
+        h = !0
+      }else {
+        if(a.buffer && !b.full(a.buffer)) {
+          return b.commit(e), b.add(a.buffer, g), d(null)
+        }
+        if(64 < a.dirty_puts) {
+          a.dirty_puts = 0, a.puts.cleanup(a.puts, k)
+        }else {
+          if(a.dirty_puts += 1, 1024 < a.puts.len) {
+            throw Error("No more than 1024 pending takes on a single channel");
+          }
+        }
+        a.puts.unbounded_unshift(a.puts, new n(e, g))
+      }
+    }
+  };
+  a.csp$channel$ReadPort$take = function(a, g) {
+    if(!b.active(g)) {
+      return null
+    }
+    if(a.buffer && 0 < b.count(a.buffer)) {
+      return b.commit(g), d(b.remove(a.buffer))
+    }
+    var e, f;
+    for(e = !0;e;) {
+      if(f = a.puts.pop(a.puts), null !== f) {
+        e = f.handler;
+        f = f.val;
+        if(b.active(e)) {
+          return e = b.commit(e), b.commit(g), c.run(e), d(f)
+        }
+        e = !0
+      }else {
+        if(a.closed) {
+          return b.commit(g), d(null)
+        }
+        64 < a.dirty_takes ? (a.dirty_takes = 0, a.takes.cleanup(a.takes, b.active)) : a.dirty_takes += 1;
+        if(1024 < a.takes.len) {
+          throw Error("No more than 1024 pending takes on a single channel");
+        }
+        a.takes.unbounded_unshift(a.takes, g);
+        return null
+      }
+    }
+  };
+  a.csp$channel$Channel$close = function(a) {
+    if(!a.closed) {
+      a.closed = !0;
+      for(var d, e, f = !0;f;) {
+        f = !1, d = a.takes.pop(a.takes), null !== d && (b.active(d) && (e = b.commit(d), c.run(function() {
+          return e(null)
+        })), f = !0)
+      }
+    }
+    return null
+  };
+  a.csp$channel$Channel$closed = function(a) {
+    return!0 === a.closed
+  }
+})(chan.types, chan.impl, box, dispatch);
 chan.util = function() {
   return{handler:function(a) {
     return{csp$channel$Handler$active:function(a) {
@@ -282,10 +307,10 @@ chan.util = function() {
     }}
   }}
 }();
-(function(a, b, d, c, e) {
-  var f = function() {
+(function(a, b, d, c, n) {
+  var k = function() {
     return null
-  }, u = function(a) {
+  }, m = function(a) {
     var b, c, d = [];
     for(b = 0;b < a;b++) {
       d.push(0)
@@ -294,7 +319,7 @@ chan.util = function() {
       c = Math.floor(Math.random() * b), d[b] = d[c], d[c] = b
     }
     return d
-  }, p = function() {
+  }, g = function() {
     var a = !0;
     return{csp$channel$Handler$active:function(b) {
       return a
@@ -302,7 +327,7 @@ chan.util = function() {
       a = null;
       return!0
     }}
-  }, h = function(a, c) {
+  }, e = function(a, c) {
     return{csp$channel$Handler$active:function(c) {
       return b.active(a)
     }, csp$channel$Handler$commit:function(d) {
@@ -313,20 +338,20 @@ chan.util = function() {
   a.chan = function(b) {
     return new a.types.Channel(a.ring_buffer(32), 0, a.ring_buffer(32), 0, b, null)
   };
-  a.take = function(a, l, k) {
-    k = k || !0;
+  a.take = function(a, l, h) {
+    h = h || !0;
     if(a = b.take(a, d(l))) {
       var e = b.deref(a);
-      k ? l(e) : c(function() {
+      h ? l(e) : c(function() {
         return l(e)
       })
     }
     return null
   };
-  a.put = function(a, l, k, e) {
-    k = k || f;
+  a.put = function(a, l, h, e) {
+    h = h || k;
     e = e || !0;
-    b.put(a, l, d(k)) && k !== f && (e ? k() : c(k));
+    b.put(a, l, d(h)) && h !== k && (e ? h() : c(h));
     return null
   };
   a.close = function(a) {
@@ -337,24 +362,24 @@ chan.util = function() {
   };
   a.do_alts = function(a, c, d) {
     d = d || {};
-    var f = p(), t = a.length, v = u(t), w = d.hasOwnProperty("priority"), s, q, m, n, r;
-    for(q = 0;q < t;q++) {
-      m = w ? q : v[q], n = a[m], m = n.constructor === Array ? n[0] : null, r = function(a, b) {
-        return a ? h(f, function() {
+    var t = g(), k = a.length, v = m(k), w = d.hasOwnProperty("priority"), u, r, p, q, s;
+    for(r = 0;r < k;r++) {
+      p = w ? r : v[r], q = a[p], p = q.constructor === Array ? q[0] : null, s = function(a, b) {
+        return a ? e(t, function() {
           return c(null, a)
-        }) : h(f, function(a) {
+        }) : e(t, function(a) {
           return c(a, b)
         })
-      }(m, n), (r = m ? b.put(m, n[1], r) : b.take(n, r)) && (s = e([b.deref(r), m ? m : n]))
+      }(p, q), (s = p ? b.put(p, q[1], s) : b.take(q, s)) && (u = n([b.deref(s), p ? p : q]))
     }
-    return s ? s : d.hasOwnProperty("default") && b.active(f) && b.commit(f) ? e([d["default"], "default"]) : null
+    return u ? u : d.hasOwnProperty("default") && b.active(t) && b.commit(t) ? n([d["default"], "default"]) : null
   };
-  a.alts = function(g, d, e, f) {
-    f = f || !0;
-    if(g = a.do_alts(g, d, e)) {
-      var h = b.deref(g);
-      f ? d(h[0], h[1]) : c(function() {
-        return d(h[0], h[1])
+  a.alts = function(d, e, h, g) {
+    g = g || !0;
+    if(d = a.do_alts(d, e, h)) {
+      var k = b.deref(d);
+      g ? e(k[0], k[1]) : c(function() {
+        return e(k[0], k[1])
       })
     }
     return null
