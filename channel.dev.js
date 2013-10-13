@@ -609,6 +609,7 @@ chan.util = (function(){
      * Frontend api constructor for a Mutli message channel.
      */
     chan.chan = function(buffer) {
+        buffer = (typeof buffer === "number") ? ((buffer !== 0) ? chan.fixed_buffer(buffer) : null) : buffer;
         return new chan.types.Channel(chan.ring_buffer(32), 0, chan.ring_buffer(32), 0, buffer, null);
     };
     /**

@@ -59,12 +59,12 @@
         chan.take(c, function(val) { is_eq(val, 42, "Value of take is what was put"); });
     });
     test("channel with buffer", function() {
-        var c = chan.chan(chan.fixed_buffer(1));
+        var c = chan.chan(1);
         chan.put(c, 42, function() { assert(true, "Basic put worked"); });
         chan.take(c, function(val) { is_eq(val, 42, "Value of take is what was put"); });
     });
     var identity_chan = function(val) {
-        var c = chan.chan(chan.fixed_buffer(1));
+        var c = chan.chan(1);
         chan.put(c, val);
         chan.close(c);
         return c;

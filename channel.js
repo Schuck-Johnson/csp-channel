@@ -336,6 +336,7 @@ chan.util = function() {
     }}
   };
   a.chan = function(b) {
+    b = "number" === typeof b ? 0 !== b ? a.fixed_buffer(b) : null : b;
     return new a.types.Channel(a.ring_buffer(32), 0, a.ring_buffer(32), 0, b, null)
   };
   a.take = function(a, l, h) {
