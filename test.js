@@ -78,9 +78,18 @@
         var pc = chan.chan();
         chan.alts([[pc, 42]], function() { assert(true, "Put works"); });
         chan.take(pc, function(val) { is_eq(val, 42, "Put value is the take value"); });
-        chan.alts([chan.chan(chan.fixed_buffer(1))], function(val, ch) {
+        chan.alts([chan.chan(1)], function(val, ch) {
             is_eq("default", ch, "Default retutned instead of channel");
             is_eq(42, val, "Default value returned");
         }, {"default": 42});
+    });
+    test('timeout', function(){
+        var t1 = chan.timeout(10), t2 = chan.timeout(5), t3 = chan.timeout(50);
+        chan.take(t1, function(val) {
+            var dt = chan.timeout(10);
+            assert(t1 !== dt, "Timeout channels created after call removal aren't equal");
+        });
+        assert(t1 === t2, "Timeout channels created within resolution are equal");
+        assert(t3 !== t2, "Timeout channels created outside resolution are not equal");
     });
 })(csp_channel);

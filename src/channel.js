@@ -738,6 +738,143 @@ chan.util = (function(){
         }, msecs);
         return ch;
     };
+    chan.timeout = (function(impl){
+        var MAX_LEVEL = 15,
+            P = 1/2,
+            TIMEOUT_RESOLUTION_MS = 10;
+        var random_level = function() {
+            var level;
+            for (level = 0; level < MAX_LEVEL; level++) {
+                if (Math.random() > P) {
+                    return level;
+                }
+            }
+            return level;
+        };
+
+        var SkipListNode = function(key, val, forward) {
+            this.key = key;
+            this.val = val;
+            this.forward = forward;
+        };
+
+        var skip_list_node = function(k, v, level) {
+
+            var i, arr = new Array(level + 1);
+            for(i = 0; i <= level; i++) {
+                arr[i] = null;
+            }
+            return new SkipListNode(k, v, arr);
+        };
+
+        var least_greatest_node = function(x, k, level, update) {
+            update = update || null;
+            var xp, i, loop;
+            for(i = level; i >= 0; i--) {
+                loop = true;
+                while(loop) {
+                    loop = false;
+                    xp = x.forward[level];
+                    if (xp && (xp.key < k)) {
+                        x = xp;
+                        loop = true;
+                    }
+                }
+                if (update) {
+                    update[i] = x;
+                }
+            }
+            return x;
+        };
+
+        var SkipList = function(header, level) {
+            this.header = header;
+            this.level = level;
+        };
+
+        var sl = SkipList.prototype;
+        sl.put = function(o, k, v) {
+            var i, xn, links, new_level,
+                update = new Array(MAX_LEVEL),
+                x = least_greatest_node(o.header, k, o.level, update).forward[0];
+            if (x && (x.key === k)) {
+                x.val = v;
+            } else {
+                new_level = random_level();
+                if (new_level > o.level) {
+                    for(i = (o.level + 1); i < new_level; i++) {
+                        update[i] = o.header;
+                    }
+                    o.level = new_level;
+                }
+                xn = skip_list_node(k, v, new Array(new_level));
+                i = 0;
+                if(i <= o.level) {
+                    links = update[i].forward;
+                    xn.forward[i] = links[i];
+                    links[i] = xn;
+                }
+            }
+        };
+
+        sl.remove = function(o, k) {
+            var i, links,
+                update = new Array(MAX_LEVEL),
+                x = least_greatest_node(o.header, k, o.level, update).forward[0];
+            if (x && (x.key === k)) {
+                for(i = 0; i <= o.level; i++) {
+                    links = update[i].forward;
+                    if (links[i] === x) {
+                        links[i] = x.forward[i];
+                    }
+                }
+            } else {
+                while((o.level > 0) && (null === o.header.forward[o.level])) {
+                    o.level = o.level - 1;
+                }
+            }
+        };
+
+        sl.ceilingEntry = function(o, k) {
+            var i, nx, xp, loop, x = o.header;
+            for (i = o.level; i >= 0; i--) {
+                xp = x;
+                loop = true;
+                while(loop) {
+                    loop = false;
+                    xp = xp.forward[i];
+                    if (xp) {
+                        if (xp.key >= k) {
+                            nx = xp;
+                        } else {
+                            loop = true;
+                        }
+                    }
+                }
+                x = nx ? nx : x;
+            }
+            if (x !== o.header) {
+                return x;
+            }
+            return null;
+        };
+
+        var timeout_map = new SkipList(skip_list_node(null, null, 0), 0);
+        return function(msecs) {
+            var tc, timeout = (new Date()).valueOf() + msecs,
+                me = timeout_map.ceilingEntry(timeout_map, timeout);
+            if (me && (me.key < (timeout + TIMEOUT_RESOLUTION_MS))) {
+                return me.val;
+            }
+            tc = chan.chan();
+            timeout_map.put(timeout_map, timeout, tc);
+            setTimeout(function() {
+                timeout_map.remove(timeout_map, timeout);
+                impl.close(tc);
+            }, msecs);
+            return tc;
+        };
+    })(chan.impl);
     /**
       * Creates a primitive looping construct to make local event loops
       */
