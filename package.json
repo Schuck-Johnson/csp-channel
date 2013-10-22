@@ -1,10 +1,10 @@
 {
   "name": "csp-channel",
-  "version": "0.0.10",
+  "version": "0.2.0",
   "main": "channel.js",
   "description": "CSP channels for javascript",
   "keywords": ["CSP", "channel", "async", "client", "browser"],
-  "repository": {"type": "git", "url": "git://://github.com/Schuck-Johnson/csp-channel.git"},
+  "repository": {"type": "git", "url": "git://github.com/Schuck-Johnson/csp-channel.git"},
   "author": {
     "name": "Peter Schuck",
     "email": "peter.schuck@johnsonfit.com"
